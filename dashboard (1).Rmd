@@ -1,0 +1,749 @@
+---
+title: "¿Lo material determina la conciencia?: factores socioeconómicos y su impacto en la ideología política"
+author: "Andrea Luján & Ricardo Asenjo"
+output:
+  flexdashboard::flex_dashboard:
+    theme: united
+---
+
+1. Introducción {data-icon="fa-solid fa-lightbulb"}
+===================================== 
+
+Column {data-width=300}
+-----------------------------------------------------------------------
+
+```{r setup, include=FALSE}
+library(stringi)
+library(ggplot2)
+library(dplyr)
+library(ggthemes)
+library(flexdashboard)
+library(kableExtra)
+library(plotly)
+library(fontawesome)
+library(rio)
+library(DT)
+library(vtable)
+library(reshape2) 
+library(tmap)
+library(tidyverse)
+library(modelsummary)
+library(sf) 
+htmltools::tagList(fontawesome::fa_html_dependency())
+
+computeMuestra = function(...) return("Muestra")
+computeDepartamentos = function(...) return(22)
+computePersonas = function(...) return(1535)
+
+setwd("C:/Users/RICARDO/OneDrive/Escritorio/Trabajo Final estadística")
+
+##Creamos el dataframe
+
+dataperu=import("Copia de datafinal.xlsx")
+
+dataperu$IDEOLOGIA <- factor(dataperu$IDEOLOGIA, levels = c(0, 1), labels = c("Izquierda", "Derecha"))
+
+tabla_distribucion1 <- table(dataperu$IDEOLOGIA , dataperu$REGION)
+
+data.idio_prov_i <- as.data.frame(tabla_distribucion1)
+
+colnames(data.idio_prov_i) <- c("Tendencia", "Region", "Frecuencia")
+data.idio_prov_por_i <- data.idio_prov_i %>%
+  group_by(Region, Tendencia) %>%
+  summarise(Frecuencia = sum(Frecuencia)) %>%  
+  mutate(Total_region = sum(Frecuencia),  
+         Porcentaje = ifelse(Tendencia == "Izquierda", Frecuencia / Total_region * 100, NA))
+
+data.idio_prov_por_izq<- data.idio_prov_por_i %>%
+  filter(Tendencia == "Izquierda")##Creamos el dataframe
+
+dataperu=import("Copia de datafinal.xlsx")
+
+dataperu$IDEOLOGIA <- factor(dataperu$IDEOLOGIA, levels = c(0, 1), labels = c("Izquierda", "Derecha"))
+
+tabla_distribucion1 <- table(dataperu$IDEOLOGIA , dataperu$REGION)
+
+data.idio_prov <- as.data.frame(tabla_distribucion1)
+
+colnames(data.idio_prov) <- c("Tendencia", "Region", "Frecuencia")
+data.idio_prov_por_i <- data.idio_prov %>%
+  group_by(Region, Tendencia) %>%
+  summarise(Frecuencia = sum(Frecuencia)) %>%  
+  mutate(Total_region = sum(Frecuencia),  
+         Porcentaje = ifelse(Tendencia == "Izquierda", Frecuencia / Total_region * 100, NA))
+
+data.idio_prov_por_izq<- data.idio_prov_por_i %>%
+  filter(Tendencia == "Izquierda")
+```
+
+### Datos de la muestra
+```{r}
+muestra = computeMuestra()
+valueBox(muestra, icon = "fa-solid fa-flask")
+```
+
+### Departamentos del Perú 
+
+```{r}
+departamentos = computeDepartamentos()
+valueBox(departamentos, icon = "fas fa-earth-americas")
+```
+
+### Cantidad de personas entrevistadas
+
+```{r}
+personas = computePersonas()
+valueBox(personas, icon = "fa-solid fa-person")
+```
+
+### Hipótesis
+
+* **Problemática observada:** 
+A partir de los resultados electorales de la votación presidencial de 2021, se evidenció la diferencia de elección por parte de Lima y la costa norte en relación al resto de provincias y la sierra sur. En base a esto, las regiones que prefirieron al candidato Pedro Castillo corresponden con zonas donde se encuentran la menor cantidad de servicios, menor presencial estatal y a su vez un índice de probreza mayor; de la misma manera, las zonas con mayores servicios y riqueza optaron por la candidata Keiko Fujimori. El presente trabajo busca encontrar relación entre los factores socioeconómicos de las personas de dichas regiones al momento de manifestar su tendencia ideológica.
+
+* **Pregunta de investigación:**
+¿Qué factores socioeconómicos influyen en la preferencia ideológica en Perú?
+
+* **Justificación:**
+Los resultados de esta investigación permitirán a los partidos políticos y candidatos ajustar sus estrategias políticas más precisas y adaptadas a las realidades socioeconómicas de los ciudadanos, lo cual ayudará a mejorar el nivel de la representación política y a diseñar políticas públicas que no solo sean más inclusivas, sino que cumplan con las expectativas de los peruanos, buscando así la cohesión social.
+
+* **Hipótesis:**
+En este trabajo nuestra hipótesis es que las variables de Ingreso (cantidad de ingreso mensual de la persona) y la variable SIT_ECO (situación económica), al igual que la opinión que tienen los entrevistados sobre los servicios (OPI's) son explicativas de su ideología. Para esto la variable ideologiá se representa de forma dicotómica. 
+
+
+Column {data-width=300}
+-----------------------------------------------------------------------
+### Variables
+```{r}
+vtable(dataperu, out = "return")%>%
+  datatable(options = 
+              list(c(scrollX=TRUE)))
+```
+
+
+Column {data-width=400}{.tabset}
+-----------------------------------------------------------------------
+
+### Mapa de tendencia ideológica por departamento
+
+```{r}
+df_mapa <- data.idio_prov_por_izq[, c("Region", "Tendencia", "Porcentaje")]
+nuevas_filas <- data.frame(
+  Region = c("TUMBES", "MADRE DE DIOS"),
+  Tendencia = c(NA, NA),
+  Porcentaje = c(NA, NA)
+)
+df_mapa$Region <- toupper(df_mapa$Region)
+df_mapa$Region <- stri_trans_general(df_mapa$Region, "Latin-ASCII")
+
+df_mapa <- rbind(df_mapa, nuevas_filas)
+
+map1 = df_mapa %>%
+  group_by(Region,Porcentaje)
+
+mapDEP1=sf::read_sf("DEPARTAMENTO.shp")
+
+mapDEP3=merge(mapDEP1,map1,by.x='DEPARTAMEN',by.y='Region', all.x = T)
+```
+
+```{r}
+tmap_mode("view") #Visualizamos el nuevo dataframe
+
+mapDEP3$Porcentaje_rounded <- round(mapDEP3$Porcentaje, 2)
+mapDEP3$Porcentaje_rounded[is.na(mapDEP3$Porcentaje_rounded)] <- "No disponible"
+
+tm_shape(mapDEP3) +
+  tm_fill("Porcentaje", id="DEPARTAMEN", palette = "Reds", style="quantile", title="% tendencia hacia la izquierda",popup.vars = c("DEPARTAMEN", "Porcentaje_rounded")) +
+  tm_borders("grey25", alpha=.05) +
+  tm_layout("Porcentaje de tendencia ideológica hacia la izquierda política por región", main.title.position = "center") + tm_view(view.legend.position = c("left","bottom")) 
+
+tmap_last <- tmap_last()
+```
+
+### Tendencia ideológica en porcentaje por región
+
+```{r}
+data.idio_prov_por <- data.idio_prov %>%
+  group_by(Region, Tendencia) %>%
+  summarise(Frecuencia = sum(Frecuencia)) %>%  
+  mutate(Total_region = sum(Frecuencia),
+    Porcentaje = (Frecuencia / Total_region) * 100  
+  )
+
+data.idio_prov_por$Region <- factor(data.idio_prov_por$Region, 
+                                    levels = data.idio_prov_por %>%
+                                      filter(Tendencia == "Izquierda") %>%
+                                      arrange(Porcentaje) %>%
+                                      pull(Region))
+
+graf60 = ggplot(data.idio_prov_por, aes(x = reorder(Region, Porcentaje), y = Porcentaje, fill = Tendencia)) +
+  geom_bar(stat = "identity", width = 0.5) + 
+  coord_flip() +  
+  labs(title = "Tendencia ideológica por región",
+       x = "Región", y = "Porcentaje",
+       fill = "Tendencia ideológica",
+       caption = "Barómetro de las Américas por LAPOP, 2023") +
+    ylim(0, 100) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))
+
+graf60 + theme_fivethirtyeight()
+gg60 <- ggplotly(graf60)
+gg60
+
+```
+
+
+2. Análisis univariado {data-icon="fa-solid fa-chart-simple"}
+===================================== 
+
+Column {data-width=500}{.tabset}
+-----------------------------------------------------------------------
+
+### Gráfico pie de Ideología
+
+```{r}
+pie_data <- dataperu %>% #dataframe
+  group_by(IDEOLOGIA) %>%
+  summarise(Frecuencia = n()) %>%
+  mutate(Porcentaje = Frecuencia / sum(Frecuencia) * 100)
+
+pie_data_na <- pie_data %>% #quitamos na
+  filter(!is.na(IDEOLOGIA))
+
+
+graf_pie_plotly <- plot_ly(data = pie_data_na, #hacemos gráfico
+                           labels = ~IDEOLOGIA, 
+                           values = ~Frecuencia,   
+                           type = 'pie', 
+                           textinfo = 'none',  
+                           hoverinfo = 'label+percent+value',
+                           marker = list(colors = c('#ff9999', '#66b3ff')))%>%
+  layout(title = "Gráfico pie de la variable Ideología",
+         showlegend = TRUE)
+
+graf_pie_plotly
+```
+
+### Tabla de frecuencias (sin NA)
+
+```{r}
+v_dep <- dataperu %>%
+  select(IDEOLOGIA)
+
+sumtable(v_dep, out = "return")%>%
+  datatable(options = 
+              list(c(scrollX=TRUE)))
+```
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Variables de control
+```{r}
+v_ctrl <- dataperu %>%
+  select(EDAD, GENERO)
+```
+
+```{r}
+sumtable(v_ctrl, out = "return")%>%
+  datatable(options = 
+              list(c(scrollX=TRUE)))
+```
+
+### Variables independientes
+
+```{r}
+dataperu$CON_POL <- factor(dataperu$CON_POL,
+                                      levels = c(0, 1, 2, 3, 4),
+                                      labels = c("Muy bajo", "Bajo", "Ni alto ni bajo", "Alto", "Muy alto"))
+```
+
+```{r}
+v_ind <- dataperu %>%
+  select(SIT_ECO, AREA, INGRESO, CON_POL, VOTO21)
+```
+
+```{r}
+sumtable(v_ind, out = "return")%>%
+  datatable(options = 
+              list(c(scrollX=TRUE)))
+```
+
+
+3. Pruebas estadísticas {data-icon="fa-solid fa-check"}
+===================================== 
+
+Column {data-width=500}{.tabset}
+-----------------------------------------------------------------------
+
+### Chi cuadrado: ideología y género
+
+```{r}
+dataperu$GENERO <- factor(dataperu$GENERO, levels = c(0, 1), labels = c("Hombre", "Mujer"))
+tabla_frecuencias1 <- table(dataperu$IDEOLOGIA, dataperu$GENERO) #Primero la tabla
+
+tablachi1 <- matrix(c(454, 487, 302, 245), nrow = 2, byrow = TRUE,
+                dimnames = list("IDEOLOGIA" = c("Izquierda", "Derecha"),
+                                "GENERO" = c("Hombre", "Mujer"))) #Luego la matriz
+
+df_tablachi1 <- as.data.frame(tablachi1) #Dataframe
+df_tablachi1$GENERO <- rownames(df_tablachi1)
+df_tablachi1 <- df_tablachi1[, c("GENERO", "Hombre", "Mujer")]
+
+df_tablachi1 %>% #Visualización
+  kable(caption = "Tabla de Contingencia: Ideología y género") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), 
+                full_width = FALSE, position = "center",font_size = 14) %>%
+  column_spec(1, bold = TRUE) %>% 
+  row_spec(0, bold = TRUE, color = "Black", background = "#eec1b1")%>% 
+  column_spec(2:3, width = "6em")
+```
+
+```{r}
+resultadochi1 <- chisq.test(tablachi1)#La prueba chi
+
+vis_chi1 <- data.frame( #El DF de la prueba
+  Estimación = c("Estadística Chi-cuadrado", "Valor p"),
+  Valor = c(resultadochi1$statistic, resultadochi1$p.value)
+)
+
+vis_chi1 %>% #La visualización
+  kable(caption = "Chi cuadrado: ideología y género") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"),
+                full_width = FALSE, position = "center") %>%
+   column_spec(1, bold = TRUE) %>%  
+  row_spec(0, bold = TRUE, color = "Black", background = "#eec1b1")
+```
+
+### Chi cuadrado: ideología y situación económica personal
+
+```{r}
+dataperu$SIT_ECO <- factor(dataperu$SIT_ECO, 
+                                         levels = c(0, 1, 2), 
+                                         labels = c("Peor", "Igual", "Mejor"))
+
+tabla_frecuencias2 <- table(dataperu$IDEOLOGIA, dataperu$SIT_ECO)
+
+tablachi2 <- matrix(c(607, 276, 58,  
+                              312, 185, 50),  
+                            nrow = 2, byrow = TRUE,
+                            dimnames = list("IDEOLOGIA" = c("Izquierda", "Derecha"),
+                                            "SITUACION ECONOMICA" = c("Peor", "Igual", "Mejor")))
+
+df_tablachi2 <- as.data.frame(tablachi2) #Dataframe
+df_tablachi2$SIT_ECO <- rownames(df_tablachi2)
+df_tablachi2 <- df_tablachi2[, c("Peor", "Igual", "Mejor")]
+
+df_tablachi2 %>% #Visualización
+  kable(caption = "Tabla de Contingencia: Ideología y Situación económica") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), 
+                full_width = FALSE, position = "center",font_size = 14) %>%
+  column_spec(1, bold = TRUE) %>% 
+  row_spec(0, bold = TRUE, color = "Black", background = "#eec1b1")%>% 
+  column_spec(2:3, width = "6em")
+```
+
+```{r}
+resultadochi2 <- chisq.test(tablachi2)
+
+vis_chi2 <- data.frame( #El DF de la prueba
+  Estimación = c("Estadística Chi-cuadrado", "Valor p"),
+  Valor = c(resultadochi2$statistic, resultadochi2$p.value)
+)
+
+vis_chi2 %>% #La visualización
+  kable(caption = "Chi cuadrado: ideología y situación económica personal") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"),
+                full_width = FALSE, position = "center") %>%
+   column_spec(1, bold = TRUE) %>%  
+  row_spec(0, bold = TRUE, color = "Black", background = "#eec1b1")
+```
+
+### Chi cuadrado: ideología e ingreso mensual
+
+```{r}
+dataperu$INGRESO <- factor(dataperu$INGRESO,
+                      levels = c(1101, 1102, 1103, 1104, 1105, 1106, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1115),
+                      labels = c("Menos s/200", "Entre S/201 - S/350", "Entre S/351 - S/635", 
+                                 "Entre S/636 – S/800", "Entre S/801 – S/980", "Entre S/981 – S/1,100",
+                                 "Entre S/1,101 – S/ 1,294", "Entre S/1,295 – S/1,500", "Entre S/1,501 – S/1,611",
+                                 "Entre S/1,612 – S/ 1,962", "Entre S/1,963 – S/2,399", "Entre S/2,400 – S/2,929", 
+                                 "Entre S/2,930 – S/3,708", "Entre S/3,709 – S/5,136", "Más de S/5,136"))
+
+tabla_frecuencias3 <- table(dataperu$IDEOLOGIA, dataperu$INGRESO)
+
+tablachi3 <- matrix(c(74, 67, 78, 82, 95, 100, 72, 75, 38, 26, 38, 49, 31, 22, 21, 45, 24, 42, 40, 41, 46, 46, 29, 25, 28, 40, 28, 31, 26, 33),  
+                            nrow = 2, byrow = TRUE,
+                            dimnames = list("IDEOLOGIA" = c("Izquierda", "Derecha"),
+                                            "AREA" = c("Menos s/200", "Entre S/201 - S/350", "Entre S/351 - S/635", 
+                                 "Entre S/636 – S/800", "Entre S/801 – S/980", "Entre S/981 – S/1,100",
+                                 "Entre S/1,101 – S/ 1,294", "Entre S/1,295 – S/1,500", "Entre S/1,501 – S/1,611",
+                                 "Entre S/1,612 – S/ 1,962", "Entre S/1,963 – S/2,399", "Entre S/2,400 – S/2,929", 
+                                 "Entre S/2,930 – S/3,708", "Entre S/3,709 – S/5,136", "Más de S/5,136")))
+
+
+df_tablachi3 <- as.data.frame(tablachi3) #Dataframe
+df_tablachi3$INGRESO <- rownames(df_tablachi3)
+df_tablachi3 <- df_tablachi3[, c("Menos s/200", "Entre S/201 - S/350", "Entre S/351 - S/635", 
+                                 "Entre S/636 – S/800", "Entre S/801 – S/980", "Entre S/981 – S/1,100",
+                                 "Entre S/1,101 – S/ 1,294", "Entre S/1,295 – S/1,500", "Entre S/1,501 – S/1,611",
+                                 "Entre S/1,612 – S/ 1,962", "Entre S/1,963 – S/2,399", "Entre S/2,400 – S/2,929", 
+                                 "Entre S/2,930 – S/3,708", "Entre S/3,709 – S/5,136", "Más de S/5,136")]
+
+df_tablachi3 %>% #Visualización
+  kable(caption = "Tabla de Contingencia: Ideología e Ingreso mensual") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), 
+                full_width = FALSE, position = "center",font_size = 14) %>%
+  column_spec(1, bold = TRUE) %>% 
+  row_spec(0, bold = TRUE, color = "Black", background = "#eec1b1")%>% 
+  column_spec(2:3, width = "6em")
+```
+
+```{r}
+resultadochi3 <- chisq.test(tablachi3)
+
+vis_chi3 <- data.frame( #El DF de la prueba
+  Estimación = c("Estadística Chi-cuadrado", "Valor p"),
+  Valor = c(resultadochi2$statistic, resultadochi2$p.value)
+)
+
+vis_chi3 %>% #La visualización
+  kable(caption = "Chi cuadrado: ideología e ingreso mensual") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"),
+                full_width = FALSE, position = "center") %>%
+   column_spec(1, bold = TRUE) %>%  
+  row_spec(0, bold = TRUE, color = "Black", background = "#eec1b1")
+```
+
+### Chi cuadrado: ideología y voto en 2021
+
+```{r}
+tabla_frecuencias4 <- table(dataperu$IDEOLOGIA, dataperu$VOTO21)
+
+tablachi4 <- matrix(c(18, 3, 31, 17, 38, 165, 9, 17, 4, 361, 6, 23, 3,
+                      7, 3, 20, 34, 15, 113, 1, 9, 1, 147, 4, 32, 4),  
+                            nrow = 2, byrow = TRUE,
+                            dimnames = list("IDEOLOGIA" = c("Izquierda", "Derecha"),
+                                            "VOTO EN 2021" = c("Acción Popular", "Alianza para el Progreso", "Anulado", "Avanza País", "Blanco", "Fuerza Popular", "Nuevo Perú", "Otro", "Partido Morado", "Perú Libre", "Podemos Perú", "Renovación Popular", "Victoria Nacional")))
+
+tablachi4 <- matrix(c(18, 3, 31, 17, 38, 165, 9, 17, 4, 361, 6, 23, 3,
+                      7, 3, 20, 34, 15, 113, 1, 9, 1, 147, 4, 32, 4),  
+                            nrow = 2, byrow = TRUE,
+                             dimnames = list("IDEOLOGIA" = c("Izquierda", "Derecha"),
+                                            "VOTO EN 2021" = c("Acción Popular", "Alianza para el Progreso", "Anulado", "Avanza País", "Blanco", "Fuerza Popular", "Nuevo Perú", "Otro", "Partido Morado", "Perú Libre", "Podemos Perú", "Renovación Popular", "Victoria Nacional")))
+
+df_tablachi4 <- as.data.frame(tablachi4) #Dataframe
+df_tablachi4$VOTO21<- rownames(df_tablachi4)
+df_tablachi4 <- df_tablachi4[, c("Acción Popular", "Alianza para el Progreso", "Anulado", "Avanza País", "Blanco", "Fuerza Popular", "Nuevo Perú", "Otro", "Partido Morado", "Perú Libre", "Podemos Perú", "Renovación Popular", "Victoria Nacional")]
+
+df_tablachi4 %>% #Visualización
+  kable(caption = "Tabla de Contingencia: Ideología y Voto 2021") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), 
+                full_width = FALSE, position = "center",font_size = 14) %>%
+  column_spec(1, bold = TRUE) %>% 
+  row_spec(0, bold = TRUE, color = "Black", background = "#eec1b1")%>% 
+  column_spec(2:3, width = "6em")
+```
+
+```{r}
+resultadochi4 <- chisq.test(tablachi4)
+
+vis_chi4 <- data.frame( #El DF de la prueba
+  Estimación = c("Estadística Chi-cuadrado", "Valor p"),
+  Valor = c(resultadochi4$statistic, resultadochi4$p.value)
+)
+
+vis_chi4 %>% #La visualización
+  kable(caption = "Chi cuadrado: ideología y voto en 2021") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"),
+                full_width = FALSE, position = "center") %>%
+   column_spec(1, bold = TRUE) %>%  
+  row_spec(0, bold = TRUE, color = "Black", background = "#eec1b1")
+```
+
+4. Regresiones {data-icon="fa-solid fa-wave-square"}
+===================================== 
+
+Column {data-width=500}{.tabset}
+-----------------------------------------------------------------------
+
+### Regresión Logística: Variables de control
+
+```{r}
+modelo_logistico1 <- glm(IDEOLOGIA ~ EDAD + GENERO - 1, 
+                        data = dataperu, 
+                        family = binomial)
+summary_modelo1 <- summary(modelo_logistico1)
+
+coeficientes1 <- summary_modelo1$coefficients
+
+resultados <- data.frame(
+  Coeficiente = coeficientes1[, 1],
+  Error_Estandar = coeficientes1[, 2],
+  Valor_z = coeficientes1[, 3],
+  p_value = format.pval(coeficientes1[, 4], digits = 4, eps = 1e-5)
+)
+
+rownames(resultados) <- rownames(coeficientes1)
+
+resultados %>%
+  kable(caption = "Resumen del Modelo Logístico (Ideología, Edad y Género)", digits = 4) %>%
+  kableExtra::kable_styling(full_width = FALSE, position = "center") %>%
+  kableExtra::kable_classic()
+```
+
+
+Column {data-width=500}{.tabset}
+-----------------------------------------------------------------------
+
+### Regresión Logística: Variables Independientes
+
+```{r}
+dataperu$AREA <- factor(dataperu$AREA, levels = c(0, 1), labels = c("Urbano", "Rural"))
+modelo_logistico2 <- glm(IDEOLOGIA ~ AREA + GENERO + EDAD - 1, 
+                        data = dataperu, 
+                        family = binomial)
+
+summary_modelo2 <- summary(modelo_logistico2)
+
+coeficientes2 <- summary_modelo2$coefficients
+
+resultados <- data.frame(
+  Coeficiente = coeficientes2[, 1],
+  Error_Estandar = coeficientes2[, 2],
+  Valor_z = coeficientes2[, 3],
+  p_value = format.pval(coeficientes2[, 4], digits = 4, eps = 1e-5),
+  AIC= round(AIC(modelo_logistico2))
+)
+
+rownames(resultados) <- rownames(coeficientes2)
+
+resultados %>%
+  kable(caption = "Resumen del Modelo Logístico (Ideología, Área y variables de control)", digits = 4) %>%
+  kableExtra::kable_styling(full_width = FALSE, position = "center") %>%
+  kableExtra::kable_classic()
+```
+
+```{r}
+modelo_logistico3 <- glm(IDEOLOGIA ~ VOTO21 + AREA + GENERO + EDAD - 1, 
+                        data = dataperu, 
+                        family = binomial)
+
+summary_modelo3 <- summary(modelo_logistico3)
+
+coeficientes3 <- summary_modelo3$coefficients
+
+resultados <- data.frame(
+  Coeficiente = coeficientes3[, 1],
+  Error_Estandar = coeficientes3[, 2],
+  Valor_z = coeficientes3[, 3],
+  p_value = format.pval(coeficientes3[, 4], digits = 4, eps = 1e-5),
+  AIC= round(AIC(modelo_logistico3))
+)
+
+rownames(resultados) <- rownames(coeficientes3)
+
+resultados %>%
+  kable(caption = "Resumen del Modelo Logístico (Ideología, Voto en Elecciones Generales 2021, Área y variables de control)", digits = 4) %>%
+  kableExtra::kable_styling(full_width = FALSE, position = "center") %>%
+  kableExtra::kable_classic()
+```
+
+
+5. Análisis multivariado {data-icon="fa-solid fa-layer-group"}
+===================================== 
+
+Column {data-width=500}{.tabset}
+-----------------------------------------------------------------------
+
+### Correlación de las variables de opinión
+
+```{r}
+data_sa<- dataperu %>%
+  group_by(REGION) %>%
+  
+  summarise(
+    OPI_EDU_p = mean(OPI_EDU, na.rm = TRUE),
+    OPI_SAL_p= mean(OPI_SAL, na.rm = TRUE),
+    OPI_AGUA_p = mean(OPI_AGUA, na.rm = TRUE),
+    OPI_VIAL_p = mean(OPI_VIAL, na.rm = TRUE),
+    indice_satisfaccion = mean(c(OPI_EDU, OPI_SAL, OPI_AGUA, OPI_VIAL), na.rm = TRUE))
+
+data_cor <- data_sa %>%
+  select(-REGION,-indice_satisfaccion)
+
+data_cor[] <- lapply(data_cor, function(x) as.numeric(as.character(x)))
+
+
+data_cor_clean <- data_cor[!apply(data_cor, 1, function(x) any(is.na(x) | is.infinite(x))), ]
+```
+
+
+```{r}
+library(ggcorrplot)
+
+library(polycor)
+corMatrix <- cor(data_cor_clean, use = "complete.obs", method = "pearson")
+
+ggcorrplot(corMatrix)
+```
+
+Column {data-width=500}{.tabset}
+-----------------------------------------------------------------------
+
+### Tabla de correlación
+
+```{r}
+round(corMatrix,2)  %>%
+  kable("html", escape = FALSE, align = "c") %>%
+  kable_styling("striped", full_width = FALSE) %>%
+  scroll_box(height = "200px", width = "100%")
+```
+
+6. Análisis conglomerado {data-icon="fa-solid fa-object-ungroup"}
+===================================== 
+
+Column {data-width=500} {.tabset}
+-----------------------------------------------------------------------
+```{r}
+library(psych)
+psych::KMO(corMatrix)
+fa_result <- fa(data_cor_clean, nfactors = 1, fm = "minres")
+
+as.data.frame(fa_result$scores)
+```
+
+### Datos
+
+```{r}
+library(BBmisc)
+
+data_sa[,c(2:5)]=normalize(data_sa[,c(2:5)],method='standardize')
+
+boxplot(normalize(data_sa[,c(2:5)],method='standardize'))
+
+```
+
+
+```{r}
+cor(data_sa[,c(2:5)])
+dataClus=data_sa[,c(2:5)]
+row.names(dataClus)=data_sa$REGION
+```
+
+```{r}
+library(cluster)
+g.dist = daisy(dataClus, metric="gower")
+```
+
+### N° de clusters PAM
+```{r}
+library(factoextra)
+fviz_nbclust(dataClus, pam,diss=g.dist,method = "gap_stat",k.max = 10,verbose = F)
+```
+
+
+### N° clusters AGNES
+
+
+```{r}
+fviz_nbclust(dataClus, hcut,diss=g.dist,method = "gap_stat",k.max = 10,verbose = F,hc_func = "agnes")
+```
+
+### N° clusters DIANA
+```{r}
+fviz_nbclust(dataClus, hcut,diss=g.dist,method = "gap_stat",k.max = 10,verbose = F,hc_func = "diana")
+```
+
+```{r}
+proyeccion = cmdscale(g.dist, k=2,add = T) 
+```
+
+### Visualización comparativa
+
+```{r}
+data_sa$dim1 <- proyeccion$points[,1]
+data_sa$dim2 <- proyeccion$points[,2]
+
+library(ggrepel)
+base= ggplot(data_sa,aes(x=dim1, y=dim2,label=row.names(dataClus))) 
+base + geom_text_repel(size=3, max.overlaps = 50,min.segment.length = unit(0, 'lines'))
+```
+
+
+
+
+Column {data-width=500} {.tabset}
+-----------------------------------------------------------------------
+
+### Orden clusters DIANA
+
+```{r}
+set.seed(123)
+res.diana <- hcut(g.dist, k = 1,hc_func='diana')
+dataClus$diana=res.diana$cluster
+# veamos
+head(dataClus,15)%>%kbl%>%kable_styling()
+```
+
+### Orden clusters AGNES
+```{r}
+set.seed(123)
+library(factoextra)
+
+res.agnes<- hcut(g.dist, k = 1,hc_func='agnes',hc_method = "ward.D")
+
+dataClus$agnes=res.agnes$cluster
+
+head(dataClus,15)%>%kbl()%>%kable_styling()
+```
+
+
+### Graf. de distancias PAM
+
+```{r}
+PAMlabels=ifelse(data_sa$indice_satisfaccion,data_sa$REGION,'')
+
+#base
+base= ggplot(data_sa,aes(x=dim1, y=dim2)) 
+
+pamPlot=base + geom_point(size=3, 
+                          aes(color=indice_satisfaccion))  + 
+        labs(title = "PAM") 
+pamPlot + geom_text_repel(size=4,
+                          aes(label=PAMlabels),
+                          max.overlaps = 50,
+                          min.segment.length = unit(0, 'lines'))
+```
+
+### Graf. de distancias AGNES
+```{r}
+AGNESlabels=ifelse(data_sa$indice_satisfaccion,data_sa$REGION,'')
+
+agnesPlot=base + geom_point(size=3, 
+                            aes(color=indice_satisfaccion)) +
+          labs(title = "AGNES") 
+
+agnesPlot + geom_text_repel(size=4,
+                            aes(label=AGNESlabels),
+                            max.overlaps = 50,
+                            min.segment.length = unit(0, 'lines'))
+```
+
+
+### Graf. de distancias DIANA
+```{r}
+DIANAlabels=ifelse(data_sa$indice_satisfaccion,data_sa$REGION,'')
+
+dianaPlot=base + geom_point(size=3,
+                            aes(color=indice_satisfaccion)) + 
+          labs(title = "DIANA")
+
+dianaPlot + geom_text_repel(size=4,
+                            aes(label=DIANAlabels), 
+                            max.overlaps = 50,
+                            min.segment.length = unit(0, 'lines'))
+```
+
+
