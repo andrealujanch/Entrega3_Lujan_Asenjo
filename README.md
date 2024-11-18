@@ -27,7 +27,7 @@
 - **Tipo de dato**: Cuantitativo continuo.
 - **Valores permitidos**: Números enteros positivos
 - **Rango**: -
-- 
+  
 ## Variable independiente 1: Situación económica personal.
 - **Descripción**: Percepción de cambio en la situación económica personal durante los últimos 12 meses, donde 0 significa “peor”, 1 significa “igual” y 2 significa “mejor”.
 - **Código**: SIT_ECO
